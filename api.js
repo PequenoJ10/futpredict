@@ -8,14 +8,22 @@ async function loadMatches() {
     const matchesList = document.getElementById("matches-container") || document.getElementById("matches-list");
     if (!matchesList) return;
 
+    matchesList.innerHTML = "<p style='color: #38bdf8; text-align: center;'>Conectando con el servidor (si Render estaba inactivo, puede tardar unos segundos)...</p>";
+
     try {
-        const response = await fetch(`${API_URL}/api/matches/`);
+        const response = await fetch(`${API_URL}/api/matches/`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
         if (!response.ok) throw new Error("No se pudieron cargar los partidos");
         
         const matches = await response.json();
 
         if (!matches || matches.length === 0) {
-            matchesList.innerHTML = "<p style='color: #aaa;'>No hay partidos registrados. Haz clic en Sincronizar.</p>";
+            matchesList.innerHTML = "<p style='color: #aaa; text-align: center;'>No hay partidos registrados. Haz clic en Sincronizar.</p>";
             return;
         }
 
@@ -37,12 +45,13 @@ async function loadMatches() {
         }).join('');
     } catch (error) {
         console.error("Error al cargar partidos:", error);
-        matchesList.innerHTML = "<p style='color: #ef4444; text-align: center;'>Error conectando con el servidor. (Si Render estaba durmiendo, recarga en 30 segundos).</p>";
+        matchesList.innerHTML = "<p style='color: #ef4444; text-align: center;'>Error conectando con el servidor. Verifica que Render esté activo.</p>";
     }
 }
 
 async function syncMatches() {
     try {
+        alert("Sincronizando partidos, por favor espera...");
         const res = await fetch(`${API_URL}/api/matches/sync?league_code=PD`, { method: 'POST' });
         if (!res.ok) throw new Error("Error al sincronizar");
         alert("¡Partidos sincronizados con éxito!");
