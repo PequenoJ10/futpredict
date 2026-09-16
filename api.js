@@ -5,86 +5,78 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function loadMatches() {
-    const matchesList = document.getElementById("matches-list");
+    const matchesList = document.getElementById("matches-container") || document.getElementById("matches-list");
     if (!matchesList) return;
 
     try {
-        const response = await fetch(`${API_URL}/matches/`);
+        const response = await fetch(`${API_URL}/api/matches/`);
+        if (!response.ok) throw new Error("No se pudieron cargar los partidos");
+        
         const matches = await response.json();
 
-        let headerHTML = `
-            <div style="margin-bottom: 20px; text-align: center;">
-                <button onclick="syncLiveMatches()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
-                    🔄 Sincronizar Fixture de Argentina
-                </button>
-                <p id="sync-status" style="margin-top: 8px; font-size: 0.9em; color: #aaa;"></p>
-            </div>
-        `;
-
-        if (matches.length === 0) {
-            matchesList.innerHTML = headerHTML + "<p>No hay partidos registrados. Haz clic en Sincronizar.</p>";
+        if (!matches || matches.length === 0) {
+            matchesList.innerHTML = "<p style='color: #aaa;'>No hay partidos registrados. Haz clic en Sincronizar.</p>";
             return;
         }
 
-        matchesList.innerHTML = headerHTML + matches.map(match => `
-            <div class="match-card" style="border: 1px solid #333; padding: 15px; margin-bottom: 15px; border-radius: 8px; background: #1e1e2e; color: #fff;">
-                <h3>${match.home_team} vs ${match.away_team}</h3>
-                <p><strong>Estado:</strong> ${match.status}</p>
-                <button onclick="generatePrediction(${match.id})" style="padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Generar Predicción
-                </button>
-                <div id="prediction-${match.id}"></div>
-            </div>
-        `).join('');
+        matchesList.innerHTML = matches.map((match, index) => {
+            const home = match.home_team;
+            const away = match.away_team;
+            const dateFormatted = new Date(match.match_date || match.date).toLocaleString();
+
+            return `
+                <div class="match-card" style="border: 1px solid #333; padding: 15px; margin-bottom: 15px; border-radius: 8px; background: #1e1e2e; color: #fff; text-align: left;">
+                    <div style="font-size: 0.75rem; color: #aaa; margin-bottom: 5px;">📅 ${dateFormatted} | Estado: ${match.status}</div>
+                    <h3 style="margin: 5px 0 15px 0; text-align: center;">${home} vs ${away}</h3>
+                    <button onclick="generatePrediction('${home}', '${away}', ${index})" style="width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                        Generar Predicción
+                    </button>
+                    <div id="prediction-${index}"></div>
+                </div>
+            `;
+        }).join('');
     } catch (error) {
         console.error("Error al cargar partidos:", error);
-        matchesList.innerHTML = "<p>Error al conectar con el servidor.</p>";
+        matchesList.innerHTML = "<p style='color: #ef4444; text-align: center;'>Error conectando con el servidor. (Si Render estaba durmiendo, recarga en 30 segundos).</p>";
     }
 }
 
-async function syncLiveMatches() {
-    const statusEl = document.getElementById("sync-status");
-    if (statusEl) statusEl.innerText = "Consultando fixture en la API...";
-
+async function syncMatches() {
     try {
-        const response = await fetch(`${API_URL}/matches/sync`, { method: 'POST' });
-        const data = await response.json();
-        
-        if (response.ok) {
-            if (statusEl) statusEl.innerText = data.message;
-            setTimeout(() => loadMatches(), 1000);
-        } else {
-            if (statusEl) statusEl.innerText = data.detail || "Error al sincronizar.";
-        }
-    } catch (error) {
-        console.error("Error al sincronizar:", error);
-        if (statusEl) statusEl.innerText = "Error de conexión con el servidor.";
+        const res = await fetch(`${API_URL}/api/matches/sync?league_code=PD`, { method: 'POST' });
+        if (!res.ok) throw new Error("Error al sincronizar");
+        alert("¡Partidos sincronizados con éxito!");
+        loadMatches();
+    } catch (err) {
+        console.error(err);
+        alert("Error al sincronizar partidos con el servidor.");
     }
 }
 
-async function generatePrediction(matchId) {
-    const resultContainer = document.getElementById(`prediction-${matchId}`);
-    if (resultContainer) resultContainer.innerText = "Calculando...";
+async function generatePrediction(home, away, index) {
+    const container = document.getElementById(`prediction-${index}`);
+    if (container) container.innerHTML = `<p style="text-align:center; color:#38bdf8; margin-top:10px;">Calculando modelo de Poisson...</p>`;
 
     try {
-        const response = await fetch(`${API_URL}/predictions/generate/${matchId}`, {
+        const response = await fetch(`${API_URL}/predictions/?home_team=${encodeURIComponent(home)}&away_team=${encodeURIComponent(away)}`, {
             method: 'POST'
         });
+
+        if (!response.ok) throw new Error("Error en el cálculo");
+
         const data = await response.json();
 
-        if (resultContainer) {
-            resultContainer.innerHTML = `
-                <div style="margin-top: 10px; padding: 10px; background: rgba(255, 255, 255, 0.08); border-radius: 6px;">
-                    <p><strong>Pronóstico:</strong> ${data.predicted_winner}</p>
-                    <p><strong>Confianza:</strong> ${(data.confidence * 100).toFixed(0)}%</p>
-                    <p><strong>Goles por Equipo:</strong> ${data.home_exp_goals} - ${data.away_exp_goals}</p>
-                    <p><strong>Total de Goles Esperados:</strong> ${data.total_exp_goals}</p>
-                    <p><strong>Total de Córners Esperados:</strong> 🚩 ${data.total_exp_corners}</p>
+        if (container) {
+            container.innerHTML = `
+                <div style="margin-top: 10px; padding: 12px; background: rgba(255, 255, 255, 0.08); border-radius: 6px; font-size: 0.85rem;">
+                    <p style="color: #4ade80; font-weight: bold; margin-top:0;">🎯 ${data.prediction}</p>
+                    <p style="margin: 5px 0;"><strong>Goles Esperados (xG):</strong> ${data.expected_home_goals} - ${data.expected_away_goals}</p>
+                    <p style="margin: 0; color: #aaa;">Probabilidades: Local (${data.home_win_probability}%) | Empate (${data.draw_probability}%) | Visita (${data.away_win_probability}%)</p>
                 </div>
             `;
         }
     } catch (error) {
         console.error("Error al generar la predicción:", error);
-        if (resultContainer) resultContainer.innerText = "Error al calcular predicción.";
+        if (container) container.innerHTML = `<p style="color: #ef4444; margin-top:10px;">Error al calcular la predicción.</p>`;
     }
 }
