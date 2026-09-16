@@ -1,4 +1,4 @@
-const API_URL = "https://futpredict-4ei2.onrender.com/api";
+const API_URL = "https://futpredict-4ei2.onrender.com";
 
 document.addEventListener("DOMContentLoaded", () => {
     loadMatches();
