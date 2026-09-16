@@ -1,8 +1,16 @@
+import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from app.config import settings
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+# Si existe la variable de entorno DATABASE_URL (la de Render), la usa. Si no, usa SQLite local o tu localhost.
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./futbol.db")
+
+# Ajuste necesario si usas postgresql en Render
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
